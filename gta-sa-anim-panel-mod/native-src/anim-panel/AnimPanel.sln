@@ -1,0 +1,21 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AnimPanel", "AnimPanel\AnimPanel.vcxproj", "{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug GTASA|Win32 = Debug GTASA|Win32
+		Release GTASA|Win32 = Release GTASA|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}.Debug GTASA|Win32.ActiveCfg = Debug GTASA|Win32
+		{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}.Debug GTASA|Win32.Build.0 = Debug GTASA|Win32
+		{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}.Release GTASA|Win32.ActiveCfg = Release GTASA|Win32
+		{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}.Release GTASA|Win32.Build.0 = Release GTASA|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
