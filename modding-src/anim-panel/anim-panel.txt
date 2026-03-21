@@ -1,0 +1,141 @@
+{$CLEO .cs}
+{$USE ini}
+thread 'ANMPBRDG'
+
+0000:
+wait 0
+
+0@ = 0 // panelVisible
+1@ = 0 // lastCommandSequence
+2@ = 0 // currentVisible
+3@ = 0 // currentCommandSequence
+4@ = 0 // currentAction
+5@ = 0 // loopDefault
+
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "panel" key "visible"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "command" key "sequence"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "command" key "action"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "last_sequence"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "last_action"
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "ack_sequence"
+
+:MAIN
+wait 0
+
+if
+    8256:   player $PLAYER_CHAR defined
+then
+    jump @MAIN
+end
+
+0AF0: 2@ = read_int_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "panel" key "visible"
+
+if
+    2@ == 1
+then
+    if
+        00DF:   actor $PLAYER_ACTOR driving
+    then
+        gosub @ReleasePanelLock
+        015A: restore_camera
+    else
+        gosub @ApplyPanelLock
+        gosub @ApplyPreviewCamera
+    end
+else
+    if
+        0@ == 1
+    then
+        gosub @ReleasePanelLock
+        015A: restore_camera
+    end
+end
+
+0085: 0@ = 2@
+
+0AF0: 3@ = read_int_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "command" key "sequence"
+if
+    003B:   3@ == 1@
+then
+    jump @MAIN_AFTER_COMMAND
+end
+
+0085: 1@ = 3@
+0AF1: write_int 1@ to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "last_sequence"
+0AF0: 4@ = read_int_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "command" key "action"
+0AF1: write_int 4@ to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "last_action"
+
+if
+    4@ == 1
+then
+    0AF1: write_int 100 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+    gosub @ReadSelection
+    gosub @PlayCurrent
+end
+
+if
+    4@ == 2
+then
+    0AF1: write_int 200 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+    gosub @StopCurrent
+end
+
+0AF1: write_int 0 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "command" key "action"
+0AF1: write_int 1@ to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "ack_sequence"
+
+:MAIN_AFTER_COMMAND
+jump @MAIN
+
+:ReadSelection
+0AF4: 10@v = read_string_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "selection" key "anim_name"
+0AF4: 11@v = read_string_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "selection" key "ifp_file"
+0AF0: 5@ = read_int_from_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "selection" key "loop_default"
+0AF1: write_int 110 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+return
+
+:PlayCurrent
+if
+    00DF:   actor $PLAYER_ACTOR driving
+then
+    0AF1: write_int 901 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+    return
+end
+
+0AF1: write_int 120 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+0687: clear_actor $PLAYER_ACTOR task
+
+if
+    5@ == 0
+then
+    0AF1: write_int 130 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+    0605: actor $PLAYER_ACTOR perform_animation 10@v IFP 11@v framedelta 4.0 loop 0 lockX 0 lockY 0 lockF 0 time -1
+else
+    0AF1: write_int 131 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+    0605: actor $PLAYER_ACTOR perform_animation 10@v IFP 11@v framedelta 4.0 loop 1 lockX 0 lockY 0 lockF 0 time -1
+end
+0AF1: write_int 150 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+return
+
+:StopCurrent
+0687: clear_actor $PLAYER_ACTOR task
+0AF1: write_int 210 to_ini_file "modloader\\AnimPanel\\cache\\bridge.ini" section "debug" key "stage"
+return
+
+:ApplyPanelLock
+01B4: set_player $PLAYER_CHAR can_move 0
+04D7: set_actor $PLAYER_ACTOR locked 1
+09F5: disable_player_mutal_activities 1
+0A20: disable_player $PLAYER_CHAR group_control_back 1
+return
+
+:ReleasePanelLock
+01B4: set_player $PLAYER_CHAR can_move 1
+04D7: set_actor $PLAYER_ACTOR locked 0
+09F5: disable_player_mutal_activities 0
+0A20: disable_player $PLAYER_CHAR group_control_back 0
+return
+
+:ApplyPreviewCamera
+067E: put_camera_on_actor $PLAYER_ACTOR offset 0.0 3.0 0.9 target_actor $PLAYER_ACTOR tilt 0.0 switchstyle 2
+return
