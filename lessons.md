@@ -241,6 +241,81 @@ This file stores project-specific lessons that must be reviewed at the start of 
 - For AnimPanel-class releases, the public install target is GTA SA root plus `AnimPanel\...`, not `modloader\AnimPanel\...`.
 - Before pushing a release backup, inspect the repo tree for stale bridge-era files and remove them if they are not part of the live runtime.
 
+## 2026-03-22 Public Release Readme Lesson
+
+### Symptom
+- A mod can be technically complete but still confusing for end users if install steps, controls, or dependencies are only described in source docs.
+
+### Root Cause
+- Developer-facing notes and player-facing release instructions were treated as optional instead of mandatory release files.
+
+### Fix
+- Ship both `README.md` and `README.txt` with every public mod release.
+- Write them for the player, not for the developer.
+- Update both files whenever runtime files, dependencies, controls, or install steps change.
+
+### Prevention
+- Every publicly shared mod in this workspace must include `README.md` and `README.txt`.
+- Both readmes must describe the current install path, required external components, controls, and usage.
+- If a change affects what the player installs or how the player uses the mod, updating both readmes is part of the implementation, not a separate optional task.
+
+## 2026-03-22 Native Fault Animation Lesson
+
+### Symptom
+- Some specific GTA SA animations can crash the game even though most neighboring animations in the same category work fine.
+
+### Root Cause
+- Certain animations are engine-unsafe outside their intended state, pose chain, or scene context. In a native ASI, some failures happen immediately in the play call and some happen later inside engine task processing.
+
+### Fix
+- Add best-effort native exception guards around the immediate play call.
+- Log faulted animations to a dedicated file.
+- Skip faulted entries during fast preview workflows.
+- Continue filtering known unsafe animation families out of the shipped catalog instead of assuming runtime guards can catch every crash.
+
+### Prevention
+- Do not promise that every engine-level animation crash can be intercepted in-process.
+- For fast preview tools, combine three layers: catalog filtering, immediate-call exception guards, and fault logging/blacklisting.
+- If a crash happens after the play call returns, treat it as a catalog safety problem first and filter that animation family out.
+
+## 2026-03-23 Basketball Animation Family Lesson
+
+### Symptom
+- Previewing `BSKTBALL/BBALL_JUMP_CANCEL` crashed the game even though earlier basketball entries and many unrelated animations had worked in the same session.
+
+### Root Cause
+- The basketball library is prop- and minigame-state-dependent. The crash happened at the exact play call for `BBALL_JUMP_CANCEL`, which indicates the family is unsafe for generic on-foot CJ preview even if some entries appear to work.
+- The generated catalog also still allowed raw `Missing animation` entries because the filter only rejected `[missing animation]` with brackets, not the plain phrase used in the generated notes.
+
+### Fix
+- Remove the entire `BSKTBALL` library from the shipped preview catalog.
+- Treat `missing animation` without brackets as a blocked condition too.
+
+### Prevention
+- If one member of a prop/minigame library crashes, remove the whole library instead of waiting for more single-ID crashes.
+- Filter both bracketed and plain-text missing-animation markers when generating the catalog from upstream descriptions.
+
+## 2026-03-23 Vehicle Door And Object Scene Lesson
+
+### Symptom
+- `PED/CAR_CLOSEDOOR_RHS` crashed the game, and nearby entries were clearly tied to doors, safes, crates, or car interaction scenes.
+
+### Root Cause
+- These clips are not free-standing on-foot previews. They depend on vehicle doors, safes, crates, or scene objects and can crash or behave unpredictably when bound directly onto CJ without the required world state.
+
+### Fix
+- Remove object-bound families at generator level:
+- `PED:CAR_*`
+- `PED:DOOR_*`
+- `RYDER:VAN_*`
+- `ROB_BANK:CAT_SAFE*`
+- `GHETTO_DB:GDB_CAR_*`
+- `POLICE:*GETOUTCAR*`
+
+### Prevention
+- If the animation name itself encodes an external object or scene dependency, do not wait for runtime crash proof from every sibling entry. Remove the whole family from the preview catalog.
+- For this panel, vehicle-door, safe, crate, and in-car scene animations are not preview-safe and must stay out of the shipped list.
+
 ### Symptom
 - Some animations previewed correctly, but specific entries such as `PED/DRIVE_R_WEAK_SLOW` crashed the game immediately on play.
 

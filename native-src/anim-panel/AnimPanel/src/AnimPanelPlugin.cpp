@@ -18,6 +18,7 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 #include <imgui.h>
 #include <backends/imgui_impl_dx9.h>
@@ -36,8 +37,10 @@ constexpr char kLegacyRuntimeRoot[] = "modloader\\AnimPanel";
 constexpr char kCatalogRelativePath[] = "data\\anim-catalog.json";
 constexpr char kFavoritesRelativePath[] = "data\\favorites.json";
 constexpr char kRecentsRelativePath[] = "data\\recents.json";
+constexpr char kSettingsRelativePath[] = "data\\settings.ini";
 constexpr char kFallbackCopyRelativePath[] = "cache\\last-selected.txt";
 constexpr char kNativeLogRelativePath[] = "logs\\native-panel.log";
+constexpr char kFaultAnimsRelativePath[] = "logs\\faultanims.txt";
 constexpr char kUiFontRelativePath[] = "fonts\\Rajdhani-Bold.ttf";
 constexpr float kPi = 3.1415926535f;
 constexpr DWORD kVerifyDelayMs = 100;
@@ -75,6 +78,7 @@ AnimEntry g_pendingEntry;
 AnimEntry g_activeEntry;
 bool g_hasPendingEntry = false;
 bool g_hasActiveEntry = false;
+std::unordered_set<std::string> g_faultedAnimIds;
 std::string g_attemptIfps[4];
 bool g_attemptUseTaskPlayAnim[4] = {};
 int g_attemptCount = 0;
@@ -98,6 +102,7 @@ HRESULT __stdcall HookedEndScene(IDirect3DDevice9* device);
 void ProcessGameplayFrame();
 void ApplyPanelControlLock();
 void ReleasePanelControlLock();
+void QueuePreviewEntry(const AnimEntry& entry, const char* reason);
 
 bool PathExists(const std::string& path) {
     return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;
@@ -238,6 +243,73 @@ void WriteFallbackCopy(const std::string& text) {
     output << text;
 }
 
+std::string MakeFaultKey(const AnimEntry& entry) {
+    return entry.id.empty() ? (entry.ifpFile + ":" + entry.animName) : entry.id;
+}
+
+void AppendFaultAnimLine(const AnimEntry& entry, const std::string& reason) {
+    const std::string key = MakeFaultKey(entry);
+    if (g_faultedAnimIds.find(key) != g_faultedAnimIds.end()) {
+        return;
+    }
+
+    g_faultedAnimIds.insert(key);
+    EnsureRuntimeDirectories();
+    std::ofstream output(ResolveWritePath(kFaultAnimsRelativePath), std::ios::binary | std::ios::app);
+    if (!output) {
+        return;
+    }
+
+    SYSTEMTIME localTime{};
+    GetLocalTime(&localTime);
+    char stamp[64];
+    std::snprintf(
+        stamp,
+        sizeof(stamp),
+        "%04u-%02u-%02u %02u:%02u:%02u",
+        static_cast<unsigned>(localTime.wYear),
+        static_cast<unsigned>(localTime.wMonth),
+        static_cast<unsigned>(localTime.wDay),
+        static_cast<unsigned>(localTime.wHour),
+        static_cast<unsigned>(localTime.wMinute),
+        static_cast<unsigned>(localTime.wSecond));
+
+    output << "[" << stamp << "] "
+           << entry.displayName << " | "
+           << entry.ifpFile << "/" << entry.animName << " | "
+           << reason << "\n";
+}
+
+void LoadSettings() {
+    g_state.autoPlayEnabled = false;
+    g_state.fastModeEnabled = false;
+
+    std::ifstream input(ResolveReadPath(kSettingsRelativePath), std::ios::binary);
+    if (!input) {
+        return;
+    }
+
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.rfind("auto_play=", 0) == 0) {
+            g_state.autoPlayEnabled = line.substr(10) == "1";
+        } else if (line.rfind("fast_mode=", 0) == 0) {
+            g_state.fastModeEnabled = line.substr(10) == "1";
+        }
+    }
+}
+
+void SaveSettings() {
+    EnsureRuntimeDirectories();
+    std::ofstream output(ResolveWritePath(kSettingsRelativePath), std::ios::binary | std::ios::trunc);
+    if (!output) {
+        return;
+    }
+
+    output << "auto_play=" << (g_state.autoPlayEnabled ? "1" : "0") << "\n";
+    output << "fast_mode=" << (g_state.fastModeEnabled ? "1" : "0") << "\n";
+}
+
 const AnimEntry* GetCurrentSelection() {
     if (g_state.filteredIndices.empty()) {
         return nullptr;
@@ -257,6 +329,10 @@ void EnsureRuntimeDirectories() {
 void SetStatus(const std::string& text) {
     g_state.statusLine = text;
     AppendNativeLog("STATUS: " + text);
+}
+
+bool IsKnownFaultAnimation(const AnimEntry& entry) {
+    return g_faultedAnimIds.find(MakeFaultKey(entry)) != g_faultedAnimIds.end();
 }
 
 bool IsPlayerPreviewBlocked(int playerHandle) {
@@ -356,6 +432,37 @@ void StopPreviewInternal(bool restoreCamera, const char* reason) {
     }
 }
 
+void MoveSelectionToNextAnimation(bool queuePreview) {
+    if (g_state.filteredIndices.empty()) {
+        return;
+    }
+
+    bool moved = false;
+    if (g_state.selectedResult + 1 < static_cast<int>(g_state.filteredIndices.size())) {
+        ++g_state.selectedResult;
+        moved = true;
+    }
+
+    if (!queuePreview || !moved) {
+        return;
+    }
+
+    const AnimEntry* next = GetCurrentSelection();
+    if (next != nullptr) {
+        QueuePreviewEntry(*next, "fault skip");
+        g_catalog.MarkRecent(g_state.filteredIndices[static_cast<size_t>(g_state.selectedResult)]);
+        g_state.recentsDirty = true;
+    }
+}
+
+void HandleAnimationFault(const AnimEntry& entry, const std::string& reason) {
+    AppendFaultAnimLine(entry, reason);
+    AppendNativeLog("Faulted animation: " + entry.ifpFile + "/" + entry.animName + " reason=" + reason);
+    SetStatus("Animation failed. Skipping.");
+    StopPreviewInternal(false, reason.c_str());
+    MoveSelectionToNextAnimation(g_state.autoPlayEnabled && g_state.visible && g_state.viewMode == 1);
+}
+
 void BuildPlayAttempts(const AnimEntry& entry) {
     g_attemptCount = 0;
     g_attemptIndex = -1;
@@ -402,6 +509,22 @@ bool PrepareAnimationResources(const AnimEntry& entry) {
     return true;
 }
 
+bool TryIssuePlayOpcode(int hPlayer, const char* anim, const char* ifp, bool loopDefault, bool lockF, bool useTaskPlayAnim) {
+    __try {
+        Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, 0);
+        Command<Commands::CLEAR_CHAR_TASKS_IMMEDIATELY>(hPlayer);
+
+        if (useTaskPlayAnim) {
+            Command<Commands::TASK_PLAY_ANIM>(hPlayer, anim, ifp, 4.0f, loopDefault, 0, 0, lockF, -1);
+        } else {
+            Command<Commands::TASK_PLAY_ANIM_NON_INTERRUPTABLE>(hPlayer, anim, ifp, 4.0f, loopDefault, 0, 0, lockF, -1);
+        }
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 void IssuePlayAttempt(CPlayerPed* player) {
     if (!player || g_attemptIndex < 0 || g_attemptIndex >= g_attemptCount) {
         return;
@@ -412,18 +535,12 @@ void IssuePlayAttempt(CPlayerPed* player) {
     const std::string& ifp = g_attemptIfps[g_attemptIndex];
     const bool useTaskPlayAnim = g_attemptUseTaskPlayAnim[g_attemptIndex];
 
-    Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, 0);
-    Command<Commands::CLEAR_CHAR_TASKS_IMMEDIATELY>(hPlayer);
-
     AppendNativeLog(std::string("Play attempt #") + std::to_string(g_attemptIndex + 1) +
         " anim=" + anim + " ifp=" + ifp + (useTaskPlayAnim ? " opcode=0605" : " opcode=0812"));
 
-    if (useTaskPlayAnim) {
-        Command<Commands::TASK_PLAY_ANIM>(hPlayer, anim.c_str(), ifp.c_str(), 4.0f,
-            g_pendingEntry.loopDefault, 0, 0, g_pendingEntry.lockF, -1);
-    } else {
-        Command<Commands::TASK_PLAY_ANIM_NON_INTERRUPTABLE>(hPlayer, anim.c_str(), ifp.c_str(), 4.0f,
-            g_pendingEntry.loopDefault, 0, 0, g_pendingEntry.lockF, -1);
+    if (!TryIssuePlayOpcode(hPlayer, anim.c_str(), ifp.c_str(), g_pendingEntry.loopDefault, g_pendingEntry.lockF, useTaskPlayAnim)) {
+        HandleAnimationFault(g_pendingEntry, "Immediate native exception during play call");
+        return;
     }
     g_attemptStartedAt = GetTickCount();
 }
@@ -471,9 +588,7 @@ void AdvancePendingPreview() {
 
     ++g_attemptIndex;
     if (g_attemptIndex >= g_attemptCount) {
-        SetStatus("Preview failed for this animation.");
-        AppendNativeLog("Preview failed after all native attempts: " + g_pendingEntry.ifpFile + "/" + g_pendingEntry.animName);
-        StopPreviewInternal(false, "all native attempts failed");
+        HandleAnimationFault(g_pendingEntry, "All native playback attempts failed");
         return;
     }
 
@@ -535,6 +650,10 @@ void SaveDirtyState() {
         }
         g_state.recentsDirty = false;
     }
+    if (g_state.settingsDirty) {
+        SaveSettings();
+        g_state.settingsDirty = false;
+    }
 }
 
 void EnsureUi() {
@@ -553,14 +672,11 @@ void EnsureUi() {
     g_catalog.LoadFavorites(ResolveWritePath(kFavoritesRelativePath), error);
     error.clear();
     g_catalog.LoadRecents(ResolveWritePath(kRecentsRelativePath), error);
+    LoadSettings();
 
     AnimPanelCallbacks callbacks;
     callbacks.onPlay = [](const AnimEntry& entry) {
-        StopPreviewInternal(false, "new selection");
-        g_pendingEntry = entry;
-        g_hasPendingEntry = true;
-        SetStatus("Previewing " + entry.block + "/" + entry.animName);
-        AppendNativeLog("Queued native preview: " + entry.ifpFile + "/" + entry.animName + " block=" + entry.block);
+        QueuePreviewEntry(entry, "new selection");
     };
     callbacks.onStop = []() {
         StopPreviewInternal(true, "manual stop");
@@ -579,6 +695,23 @@ void EnsureUi() {
 
     g_ui = std::make_unique<AnimPanelUI>(g_catalog, g_state, std::move(callbacks));
     AppendNativeLog("UI created and catalog loaded.");
+}
+
+void QueuePreviewEntry(const AnimEntry& entry, const char* reason) {
+    if (IsKnownFaultAnimation(entry)) {
+        SetStatus("Known fault animation skipped.");
+        AppendNativeLog("Skipped known fault animation: " + entry.ifpFile + "/" + entry.animName);
+        if (g_state.autoPlayEnabled && g_state.visible && g_state.viewMode == 1) {
+            MoveSelectionToNextAnimation(true);
+        }
+        return;
+    }
+
+    StopPreviewInternal(false, reason);
+    g_pendingEntry = entry;
+    g_hasPendingEntry = true;
+    SetStatus("Previewing " + entry.block + "/" + entry.animName);
+    AppendNativeLog("Queued native preview: " + entry.ifpFile + "/" + entry.animName + " block=" + entry.block);
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {

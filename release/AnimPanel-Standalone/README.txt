@@ -20,6 +20,7 @@ Files included:
 - AnimPanel\data\anim-catalog.json
 - AnimPanel\data\favorites.json
 - AnimPanel\data\recents.json
+- AnimPanel\data\settings.ini if created by the mod
 - AnimPanel\fonts\Rajdhani-Bold.ttf
 
 Installation:
@@ -44,8 +45,11 @@ Controls:
 - 8 / 2 move up or down
 - 4 / 6 page
 - 5 preview animation
+- Settings > Auto Play lets the current selection preview automatically while browsing
 
 Notes:
 - Gameplay input is blocked while the panel is open.
 - Favorites and recents are saved automatically.
+- Auto Play setting is saved automatically.
+- Faulted animations are logged to AnimPanel\logs\faultanims.txt.
 - If F8 does nothing, your game is usually missing an ASI Loader.

@@ -3,7 +3,7 @@ param(
     [string]$SourcePath = "",
     [string]$SourceUrl = "https://raw.githubusercontent.com/openmultiplayer/web/master/frontend/src/data/animations.ts",
     [string]$OverridePath = "D:\GTASAVIDEOCEKME\tools\anim-panel-openmp-overrides.json",
-    [string]$OutputPath = "D:\GTASAVIDEOCEKME\modloader\AnimPanel\data\anim-catalog.json"
+    [string]$OutputPath = "D:\GTASAVIDEOCEKME\AnimPanel\data\anim-catalog.json"
 )
 
 Set-StrictMode -Version Latest
@@ -190,12 +190,16 @@ function Is-PlayableAnimation {
         return $true
     }
 
+    if ($library -eq "BSKTBALL") {
+        return $false
+    }
+
     if ($Overrides.excludeLibraries -contains $library -or $Overrides.excludeIds -contains $key) {
         return $false
     }
 
     $combined = ("{0} {1} {2} {3}" -f $library, $name, $Anim.description, $Anim.notes).ToLowerInvariant()
-    if ($combined.Contains("[missing animation]")) {
+    if ($combined.Contains("[missing animation]") -or $combined.Contains("missing animation")) {
         return $false
     }
 
@@ -210,7 +214,7 @@ function Is-PlayableAnimation {
         "passanger", "passenger", "lowrider", "windshield", "go-kart", "riding", "ride ",
         "boat driving", "truck ", " truck", "shuffle to the driver's", "shuffling to the driver's",
         "pulling out the driver", "sitting in a lowrider", "driver switches", "switches with driver",
-        "kissing", "blowjob",
+        "kissing", "blowjob", "basketball", "dribbling", "dunking", "shot while jumping",
         "bartender", "taking order", "serving", "cashier", "shop clerk", "shopkeeper",
         "vending machine", "customer", "dealer dealing", "dealer idle", "drug dealer",
         "tattoo order", "tattoo artist", "haircut", "hairdresser", "barber", "buying haircut",
@@ -228,6 +232,14 @@ function Is-PlayableAnimation {
     )
 
     if ($library -eq "PED" -and $name.StartsWith("DRIVE_")) {
+        return $false
+    }
+
+    if (($library -eq "PED" -and ($name.StartsWith("CAR_") -or $name.StartsWith("DOOR_"))) -or
+        ($library -eq "RYDER" -and $name.StartsWith("VAN_")) -or
+        ($library -eq "ROB_BANK" -and $name.StartsWith("CAT_SAFE")) -or
+        ($library -eq "GHETTO_DB" -and $name.StartsWith("GDB_CAR_")) -or
+        ($library -eq "POLICE" -and $name.Contains("GETOUTCAR"))) {
         return $false
     }
 
