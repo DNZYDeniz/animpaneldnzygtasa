@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release GTASA|Win32">
+      <Configuration>Release GTASA</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug GTASA|Win32">
+      <Configuration>Debug GTASA</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E5AE0918-3415-4C65-8CC1-DA6B351A7FA1}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>AnimPanel</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release GTASA|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug GTASA|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release GTASA|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug GTASA|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release GTASA|Win32'">
+    <OutDir>$(SolutionDir)output\</OutDir>
+    <IntDir>$(ProjectDir).obj\Release\</IntDir>
+    <TargetName>AnimPanel</TargetName>
+    <TargetExt>.asi</TargetExt>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug GTASA|Win32'">
+    <OutDir>$(SolutionDir)output\</OutDir>
+    <IntDir>$(ProjectDir).obj\Debug\</IntDir>
+    <TargetName>AnimPanel_d</TargetName>
+    <TargetExt>.asi</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release GTASA|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\third_party\imgui\;$(ProjectDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\game\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\rw\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;RW;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>No</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d9.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug GTASA|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\third_party\imgui\;$(ProjectDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\game\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\rw\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;RW;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>Debug</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d9.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\AnimCatalog.cpp" />
+    <ClCompile Include="src\AnimPanelPlugin.cpp" />
+    <ClCompile Include="src\AnimPanelUI.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\DynAddress.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\GameVersion.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\Patch.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\extensions\Paths.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\extensions\ScriptCommands.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\common.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\CPools.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\CRunningScript.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\imgui.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\backends\imgui_impl_dx9.cpp" />
+    <ClCompile Include="..\..\..\third_party\imgui\backends\imgui_impl_win32.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\AnimCatalog.h" />
+    <ClInclude Include="src\AnimPanelUI.h" />
+    <ClInclude Include="src\FlatJson.h" />
+    <ClInclude Include="src\VTableHook.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>
