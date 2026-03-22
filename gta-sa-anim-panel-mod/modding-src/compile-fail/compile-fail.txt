@@ -1,7 +1,0 @@
-{$CLEO .cs}
-
-thread 'CDFAIL'
-
-wait 0
-THIS IS NOT VALID
-004E: end_thread
