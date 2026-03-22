@@ -37,6 +37,7 @@ public:
 
 private:
     const AnimEntry* GetSelectedEntry() const;
+    const std::string& GetCategoryLabel(int index) const;
     void ApplyStyle();
     void RenderCategoryMenu();
     void RenderAnimationMenu();
@@ -45,6 +46,7 @@ private:
     AnimCatalog& m_catalog;
     AnimPanelState& m_state;
     AnimPanelCallbacks m_callbacks;
+    std::vector<std::string> m_categories;
 };
 
 } // namespace animpanel

@@ -59,9 +59,9 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\..\..\third_party\imgui\;$(SolutionDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\third_party\imgui\;$(ProjectDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\game\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\rw\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;RW;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -80,9 +80,9 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\..\..\third_party\imgui\;$(SolutionDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\third_party\imgui\;$(ProjectDir)..\..\..\third_party\imgui\backends\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\;$(ProjectDir)..\..\..\third_party\plugin-sdk\shared\game\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\;$(ProjectDir)..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\rw\;$(ProjectDir)src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;GTASA;RW;IMGUI_IMPL_WIN32_DISABLE_GAMEPAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -96,6 +96,14 @@
     <ClCompile Include="src\AnimCatalog.cpp" />
     <ClCompile Include="src\AnimPanelPlugin.cpp" />
     <ClCompile Include="src\AnimPanelUI.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\DynAddress.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\GameVersion.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\Patch.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\extensions\Paths.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\shared\extensions\ScriptCommands.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\common.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\CPools.cpp" />
+    <ClCompile Include="..\..\..\third_party\plugin-sdk\plugin_sa\game_sa\CRunningScript.cpp" />
     <ClCompile Include="..\..\..\third_party\imgui\imgui.cpp" />
     <ClCompile Include="..\..\..\third_party\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\third_party\imgui\imgui_tables.cpp" />

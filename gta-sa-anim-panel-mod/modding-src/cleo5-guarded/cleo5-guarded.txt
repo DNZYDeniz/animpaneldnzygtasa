@@ -1,0 +1,15 @@
+{$CLEO .cs}
+
+thread 'CDG5'
+
+wait 2000
+
+if
+0AAB:   does_file_exist "CLEO.asi"
+then
+    0AD1: show_formatted_text_highpriority "~w~CLEO runtime guard passed." time 2500
+else
+    0AD1: show_formatted_text_highpriority "~r~CLEO runtime missing." time 3000
+end
+
+0A93: terminate_this_custom_script

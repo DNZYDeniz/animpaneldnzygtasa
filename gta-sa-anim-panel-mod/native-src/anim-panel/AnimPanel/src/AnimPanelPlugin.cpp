@@ -4,6 +4,12 @@
 
 #include <windows.h>
 #include <d3d9.h>
+#include <plugin.h>
+#include <RenderWare.h>
+#include <CWorld.h>
+#include <CPools.h>
+#include <extensions/ScriptCommands.h>
+#include <eScriptCommands.h>
 
 #include <cstdint>
 #include <cstring>
@@ -11,12 +17,15 @@
 #include <memory>
 #include <string>
 #include <algorithm>
+#include <cmath>
 
 #include <imgui.h>
 #include <backends/imgui_impl_dx9.h>
 #include <backends/imgui_impl_win32.h>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+using namespace plugin;
 
 namespace animpanel {
 
@@ -26,9 +35,14 @@ constexpr char kCatalogPath[] = "modloader\\AnimPanel\\data\\anim-catalog.json";
 constexpr char kFavoritesPath[] = "modloader\\AnimPanel\\data\\favorites.json";
 constexpr char kRecentsPath[] = "modloader\\AnimPanel\\data\\recents.json";
 constexpr char kFallbackCopyPath[] = "modloader\\AnimPanel\\cache\\last-selected.txt";
-constexpr char kBridgePath[] = "modloader\\AnimPanel\\cache\\bridge.ini";
 constexpr char kNativeLogPath[] = "modloader\\AnimPanel\\logs\\native-panel.log";
 constexpr char kUiFontPath[] = "modloader\\AnimPanel\\fonts\\Rajdhani-Bold.ttf";
+constexpr float kPi = 3.1415926535f;
+constexpr DWORD kVerifyDelayMs = 100;
+constexpr float kFacingHeading = 180.0f;
+constexpr float kCameraDistance = 3.55f;
+constexpr float kCameraHeight = 0.82f;
+constexpr float kCameraTargetHeight = 0.60f;
 
 typedef HRESULT(__stdcall* EndSceneFn)(IDirect3DDevice9*);
 typedef HRESULT(__stdcall* ResetFn)(IDirect3DDevice9*, D3DPRESENT_PARAMETERS*);
@@ -47,11 +61,24 @@ IDirect3DDevice9* g_device = nullptr;
 HWND g_window = nullptr;
 WNDPROC g_originalWndProc = nullptr;
 bool g_imguiReady = false;
-int g_bridgeSequence = 0;
-bool g_lastBridgeVisible = false;
-std::string g_lastBridgeSelectionId;
 bool g_loggedFirstRender = false;
 void** g_hookedVTable = nullptr;
+bool g_nativeTickRegistered = false;
+bool g_cameraApplied = false;
+bool g_panelControlLocked = false;
+bool g_previewActive = false;
+bool g_previousVisible = false;
+std::string g_loadedIfp;
+AnimEntry g_pendingEntry;
+AnimEntry g_activeEntry;
+bool g_hasPendingEntry = false;
+bool g_hasActiveEntry = false;
+std::string g_attemptIfps[4];
+bool g_attemptUseTaskPlayAnim[4] = {};
+int g_attemptCount = 0;
+int g_attemptIndex = -1;
+DWORD g_attemptStartedAt = 0;
+bool g_panelJustOpened = false;
 
 bool ConsumeGlobalKeyPress(int vk) {
     static bool previous[256] = {};
@@ -62,13 +89,16 @@ bool ConsumeGlobalKeyPress(int vk) {
 }
 
 void SetStatus(const std::string& text);
-void EnsureBridgeDirectories();
+void EnsureRuntimeDirectories();
 HRESULT __stdcall HookedReset(IDirect3DDevice9* device, D3DPRESENT_PARAMETERS* params);
 HRESULT __stdcall HookedPresent(IDirect3DDevice9* device, const RECT* sourceRect, const RECT* destRect, HWND overrideWindow, const RGNDATA* dirtyRegion);
 HRESULT __stdcall HookedEndScene(IDirect3DDevice9* device);
+void ProcessGameplayFrame();
+void ApplyPanelControlLock();
+void ReleasePanelControlLock();
 
 void AppendNativeLog(const std::string& text) {
-    EnsureBridgeDirectories();
+    EnsureRuntimeDirectories();
     CreateDirectoryA("modloader\\AnimPanel\\logs", nullptr);
 
     std::ofstream output(kNativeLogPath, std::ios::binary | std::ios::app);
@@ -173,65 +203,273 @@ const AnimEntry* GetCurrentSelection() {
     return &g_catalog.Entries()[g_state.filteredIndices[static_cast<size_t>(g_state.selectedResult)]];
 }
 
-void EnsureBridgeDirectories() {
+void EnsureRuntimeDirectories() {
     CreateDirectoryA("modloader\\AnimPanel", nullptr);
     CreateDirectoryA("modloader\\AnimPanel\\cache", nullptr);
-}
-
-void WriteBridgeState(int commandAction, const AnimEntry* entry) {
-    EnsureBridgeDirectories();
-
-    std::ofstream output(kBridgePath, std::ios::binary | std::ios::trunc);
-    if (!output) {
-        SetStatus("Failed to write bridge.ini");
-        AppendNativeLog("Failed to write bridge.ini");
-        return;
-    }
-
-    const int visible = g_state.visible ? 1 : 0;
-    output << "[panel]\n";
-    output << "visible=" << visible << "\n";
-    output << "category_index=" << g_state.categoryIndex << "\n";
-    output << "selected_result=" << g_state.selectedResult << "\n";
-    output << "\n[selection]\n";
-    if (entry != nullptr) {
-        const std::string ifpUpper = ToUpperCopy(entry->ifpFile);
-        output << "id=" << entry->id << "\n";
-        output << "display_name=" << entry->displayName << "\n";
-        output << "block=" << entry->block << "\n";
-        output << "anim_name=" << entry->animName << "\n";
-        output << "ifp_file=" << ifpUpper << "\n";
-        output << "category=" << entry->category << "\n";
-        output << "loop_default=" << (entry->loopDefault ? 1 : 0) << "\n";
-    } else {
-        output << "id=\n";
-        output << "display_name=\n";
-        output << "block=\n";
-        output << "anim_name=\n";
-        output << "ifp_file=\n";
-        output << "category=\n";
-        output << "loop_default=0\n";
-    }
-    output << "\n[command]\n";
-    output << "sequence=" << g_bridgeSequence << "\n";
-    output << "action=" << commandAction << "\n";
-}
-
-void SyncBridgeSelection(bool forceWrite, int commandAction) {
-    const AnimEntry* selected = GetCurrentSelection();
-    const std::string selectedId = selected != nullptr ? selected->id : std::string();
-    if (!forceWrite && g_lastBridgeVisible == g_state.visible && g_lastBridgeSelectionId == selectedId && commandAction == 0) {
-        return;
-    }
-
-    WriteBridgeState(commandAction, selected);
-    g_lastBridgeVisible = g_state.visible;
-    g_lastBridgeSelectionId = selectedId;
 }
 
 void SetStatus(const std::string& text) {
     g_state.statusLine = text;
     AppendNativeLog("STATUS: " + text);
+}
+
+bool IsPlayerPreviewBlocked(int playerHandle) {
+    if (Command<Commands::IS_CHAR_IN_ANY_CAR>(playerHandle) ||
+        Command<Commands::IS_CHAR_IN_WATER>(playerHandle) ||
+        Command<Commands::IS_PLAYER_USING_JETPACK>(0)) {
+        return true;
+    }
+    return false;
+}
+
+void RestorePreviewCamera() {
+    if (!g_cameraApplied) {
+        return;
+    }
+    Command<Commands::RESTORE_CAMERA_JUMPCUT>();
+    g_cameraApplied = false;
+}
+
+void UpdatePreviewCamera() {
+    if (!g_state.visible) {
+        RestorePreviewCamera();
+        return;
+    }
+
+    auto* player = FindPlayerPed();
+    if (!player) {
+        return;
+    }
+
+    const int hPlayer = CPools::GetPedRef(player);
+    if (IsPlayerPreviewBlocked(hPlayer)) {
+        RestorePreviewCamera();
+        return;
+    }
+
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    Command<Commands::GET_CHAR_COORDINATES>(hPlayer, &x, &y, &z);
+    const float heading = kFacingHeading;
+
+    const float radians = heading * (kPi / 180.0f);
+    const float cameraX = x + std::sin(radians) * kCameraDistance;
+    const float cameraY = y + std::cos(radians) * kCameraDistance;
+    const float cameraZ = z + kCameraHeight;
+
+    Command<Commands::SET_FIXED_CAMERA_POSITION>(cameraX, cameraY, cameraZ, 0.0f, 0.0f);
+    Command<Commands::POINT_CAMERA_AT_POINT>(x, y, z + kCameraTargetHeight, 2);
+    g_cameraApplied = true;
+}
+
+void ApplyPanelControlLock() {
+    if (g_panelControlLocked) {
+        return;
+    }
+    Command<Commands::SET_PLAYER_CONTROL>(0, 0);
+    Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, 0);
+    g_panelControlLocked = true;
+}
+
+void ReleasePanelControlLock() {
+    if (!g_panelControlLocked) {
+        return;
+    }
+    Command<Commands::SET_PLAYER_CONTROL>(0, 1);
+    Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, 1);
+    g_panelControlLocked = false;
+}
+
+void ReleaseLoadedIfp() {
+    if (!g_loadedIfp.empty() && g_loadedIfp != "PED") {
+        Command<Commands::REMOVE_ANIMATION>(g_loadedIfp.c_str());
+    }
+    g_loadedIfp.clear();
+}
+
+void StopPreviewInternal(bool restoreCamera, const char* reason) {
+    auto* player = FindPlayerPed();
+    if (player) {
+        const int hPlayer = CPools::GetPedRef(player);
+        Command<Commands::CLEAR_CHAR_TASKS_IMMEDIATELY>(hPlayer);
+    }
+    Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, g_state.visible ? 0 : 1);
+    ReleaseLoadedIfp();
+    g_previewActive = false;
+    g_hasPendingEntry = false;
+    g_hasActiveEntry = false;
+    g_attemptCount = 0;
+    g_attemptIndex = -1;
+    g_attemptStartedAt = 0;
+    if (restoreCamera) {
+        RestorePreviewCamera();
+    }
+    if (reason && reason[0] != '\0') {
+        AppendNativeLog(std::string("Preview stopped: ") + reason);
+    }
+}
+
+void BuildPlayAttempts(const AnimEntry& entry) {
+    g_attemptCount = 0;
+    g_attemptIndex = -1;
+
+    const std::string requestIfp = ToUpperCopy(entry.ifpFile);
+    const std::string primaryIfp = entry.pedFlag ? (entry.block.empty() ? "PED" : entry.block) : (entry.block.empty() ? requestIfp : entry.block);
+    const std::string fallbackIfp = requestIfp;
+
+    auto pushAttempt = [](const std::string& ifp, bool useTaskPlayAnim) {
+        for (int i = 0; i < g_attemptCount; ++i) {
+            if (g_attemptIfps[i] == ifp && g_attemptUseTaskPlayAnim[i] == useTaskPlayAnim) {
+                return;
+            }
+        }
+        g_attemptIfps[g_attemptCount] = ifp;
+        g_attemptUseTaskPlayAnim[g_attemptCount] = useTaskPlayAnim;
+        ++g_attemptCount;
+    };
+
+    pushAttempt(primaryIfp, false);
+    pushAttempt(primaryIfp, true);
+    pushAttempt(fallbackIfp, false);
+    pushAttempt(fallbackIfp, true);
+}
+
+bool PrepareAnimationResources(const AnimEntry& entry) {
+    const std::string requestIfp = ToUpperCopy(entry.ifpFile);
+    if (entry.pedFlag || requestIfp == "PED") {
+        ReleaseLoadedIfp();
+        return true;
+    }
+
+    if (g_loadedIfp != requestIfp) {
+        ReleaseLoadedIfp();
+        Command<Commands::REQUEST_ANIMATION>(requestIfp.c_str());
+        Command<Commands::LOAD_ALL_MODELS_NOW>();
+        if (!Command<Commands::HAS_ANIMATION_LOADED>(requestIfp.c_str())) {
+            AppendNativeLog("Failed to load animation IFP: " + requestIfp);
+            SetStatus("Failed to load animation block.");
+            return false;
+        }
+        g_loadedIfp = requestIfp;
+    }
+    return true;
+}
+
+void IssuePlayAttempt(CPlayerPed* player) {
+    if (!player || g_attemptIndex < 0 || g_attemptIndex >= g_attemptCount) {
+        return;
+    }
+
+    const int hPlayer = CPools::GetPedRef(player);
+    const std::string& anim = g_pendingEntry.animName;
+    const std::string& ifp = g_attemptIfps[g_attemptIndex];
+    const bool useTaskPlayAnim = g_attemptUseTaskPlayAnim[g_attemptIndex];
+
+    Command<Commands::SET_PLAYER_ENTER_CAR_BUTTON>(0, 0);
+    Command<Commands::CLEAR_CHAR_TASKS_IMMEDIATELY>(hPlayer);
+
+    AppendNativeLog(std::string("Play attempt #") + std::to_string(g_attemptIndex + 1) +
+        " anim=" + anim + " ifp=" + ifp + (useTaskPlayAnim ? " opcode=0605" : " opcode=0812"));
+
+    if (useTaskPlayAnim) {
+        Command<Commands::TASK_PLAY_ANIM>(hPlayer, anim.c_str(), ifp.c_str(), 4.0f,
+            g_pendingEntry.loopDefault, 0, 0, g_pendingEntry.lockF, -1);
+    } else {
+        Command<Commands::TASK_PLAY_ANIM_NON_INTERRUPTABLE>(hPlayer, anim.c_str(), ifp.c_str(), 4.0f,
+            g_pendingEntry.loopDefault, 0, 0, g_pendingEntry.lockF, -1);
+    }
+    g_attemptStartedAt = GetTickCount();
+}
+
+void AdvancePendingPreview() {
+    if (!g_hasPendingEntry) {
+        return;
+    }
+
+    auto* player = FindPlayerPed();
+    if (!player) {
+        return;
+    }
+
+    const int hPlayer = CPools::GetPedRef(player);
+    if (IsPlayerPreviewBlocked(hPlayer)) {
+        SetStatus("Preview requires CJ on foot and out of water.");
+        StopPreviewInternal(false, "player state blocked preview");
+        return;
+    }
+
+    if (g_attemptIndex < 0) {
+        if (!PrepareAnimationResources(g_pendingEntry)) {
+            StopPreviewInternal(false, "animation resources failed");
+            return;
+        }
+        BuildPlayAttempts(g_pendingEntry);
+        g_attemptIndex = 0;
+        IssuePlayAttempt(player);
+        return;
+    }
+
+    if (GetTickCount() - g_attemptStartedAt < kVerifyDelayMs) {
+        return;
+    }
+
+    if (Command<Commands::IS_CHAR_PLAYING_ANIM>(hPlayer, g_pendingEntry.animName.c_str())) {
+        g_previewActive = true;
+        g_hasActiveEntry = true;
+        g_activeEntry = g_pendingEntry;
+        g_hasPendingEntry = false;
+        AppendNativeLog("Preview active: " + g_activeEntry.ifpFile + "/" + g_activeEntry.animName);
+        return;
+    }
+
+    ++g_attemptIndex;
+    if (g_attemptIndex >= g_attemptCount) {
+        SetStatus("Preview failed for this animation.");
+        AppendNativeLog("Preview failed after all native attempts: " + g_pendingEntry.ifpFile + "/" + g_pendingEntry.animName);
+        StopPreviewInternal(false, "all native attempts failed");
+        return;
+    }
+
+    IssuePlayAttempt(player);
+}
+
+void ProcessGameplayFrame() {
+    if (!g_previousVisible && g_state.visible) {
+        g_panelJustOpened = true;
+        ApplyPanelControlLock();
+    }
+
+    if (g_previousVisible && !g_state.visible) {
+        StopPreviewInternal(true, "panel closed");
+        ReleasePanelControlLock();
+        g_panelJustOpened = false;
+    }
+    g_previousVisible = g_state.visible;
+
+    if (!g_nativeTickRegistered) {
+        return;
+    }
+
+    if (g_state.visible) {
+        ApplyPanelControlLock();
+        if (g_panelJustOpened) {
+            auto* player = FindPlayerPed();
+            if (player) {
+                const int hPlayer = CPools::GetPedRef(player);
+                if (!IsPlayerPreviewBlocked(hPlayer)) {
+                    Command<Commands::SET_CHAR_HEADING>(hPlayer, kFacingHeading);
+                }
+            }
+            g_panelJustOpened = false;
+        }
+        UpdatePreviewCamera();
+    } else {
+        ReleasePanelControlLock();
+        RestorePreviewCamera();
+    }
+
+    AdvancePendingPreview();
 }
 
 void SaveDirtyState() {
@@ -270,22 +508,16 @@ void EnsureUi() {
     error.clear();
     g_catalog.LoadRecents(kRecentsPath, error);
 
-    SyncBridgeSelection(true, 0);
-
     AnimPanelCallbacks callbacks;
     callbacks.onPlay = [](const AnimEntry& entry) {
-        ++g_bridgeSequence;
-        WriteBridgeState(1, &entry);
-        g_lastBridgeVisible = g_state.visible;
-        g_lastBridgeSelectionId = entry.id;
+        StopPreviewInternal(false, "new selection");
+        g_pendingEntry = entry;
+        g_hasPendingEntry = true;
         SetStatus("Previewing " + entry.block + "/" + entry.animName);
+        AppendNativeLog("Queued native preview: " + entry.ifpFile + "/" + entry.animName + " block=" + entry.block);
     };
     callbacks.onStop = []() {
-        ++g_bridgeSequence;
-        WriteBridgeState(2, GetCurrentSelection());
-        g_lastBridgeVisible = g_state.visible;
-        const AnimEntry* selected = GetCurrentSelection();
-        g_lastBridgeSelectionId = selected != nullptr ? selected->id : std::string();
+        StopPreviewInternal(true, "manual stop");
         SetStatus("Preview stopped.");
     };
     callbacks.onCopy = [](const AnimEntry& entry) {
@@ -411,17 +643,14 @@ void RenderFrame(IDirect3DDevice9* device) {
 
     if (ConsumeGlobalKeyPress(VK_F8)) {
         g_state.visible = !g_state.visible;
-        SyncBridgeSelection(true, 0);
     }
 
     if (g_state.visible && ConsumeGlobalKeyPress(VK_ESCAPE)) {
         g_state.visible = false;
-        SyncBridgeSelection(true, 0);
     }
 
     if (g_state.visible && g_window != nullptr && GetForegroundWindow() != g_window) {
         g_state.visible = false;
-        SyncBridgeSelection(true, 0);
     }
 
     if (g_imguiReady && g_ui != nullptr) {
@@ -433,7 +662,6 @@ void RenderFrame(IDirect3DDevice9* device) {
         ImGui::Render();
         ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
         SaveDirtyState();
-        SyncBridgeSelection(false, 0);
     }
 }
 
@@ -449,6 +677,14 @@ HRESULT __stdcall HookedPresent(IDirect3DDevice9* device, const RECT* sourceRect
 
 DWORD WINAPI MainThread(LPVOID) {
     AppendNativeLog("AnimPanel thread started.");
+    if (!g_nativeTickRegistered) {
+        plugin::Events::processScriptsEvent += [] {
+            ProcessGameplayFrame();
+        };
+        g_nativeTickRegistered = true;
+        AppendNativeLog("Native gameplay tick registered.");
+    }
+
     while (GetModuleHandleA("d3d9.dll") == nullptr) {
         Sleep(50);
     }

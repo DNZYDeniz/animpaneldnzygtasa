@@ -1,0 +1,255 @@
+{$CLEO .cs}
+
+script_name {name} "coordhud"
+
+const Output_Filename = "modloader\\CoordHUD\\saved-coordinates.txt"
+const Last_Filename = "modloader\\CoordHUD\\last-coordinate.txt"
+const Names_Filename = "modloader\\CoordHUD\\name-list.txt"
+
+use_text_commands {state} true
+
+float playerPos[3]
+float playerHeading = 0.0
+shortString directionText
+longString statusText
+longString selectedName
+longString lineText
+int statusTimer = 0
+int actionCooldown = 0
+int nameIndex = 1
+int savedTag = 0
+int namesMissingWarned = 0
+
+string_format directionText = "N"
+string_format statusText = ""
+gosub @LoadSelectedName
+
+while true
+    wait {time} 0
+
+    if and
+        is_player_playing $player1
+        not is_char_dead $scplayer
+    then
+        playerPos[0], playerPos[1], playerPos[2] = get_char_coordinates $scplayer
+        playerHeading = get_char_heading $scplayer
+        gosub @UpdateDirectionText
+
+        if
+            actionCooldown > 0
+        then
+            actionCooldown -= 1
+        end
+
+        if
+            actionCooldown == 0
+        then
+            if
+                is_key_just_pressed {keyCode} KeyCode.NumPad4
+            then
+                if
+                    nameIndex > 1
+                then
+                    nameIndex -= 1
+                    gosub @LoadSelectedName
+                end
+                actionCooldown = 2
+            else
+                if
+                    is_key_just_pressed {keyCode} KeyCode.NumPad6
+                then
+                    if
+                        nameIndex < 999
+                    then
+                        nameIndex += 1
+                        gosub @LoadSelectedName
+                    end
+                    actionCooldown = 2
+                else
+                    if
+                        is_key_just_pressed {keyCode} KeyCode.F3
+                    then
+                        gosub @SaveCurrentCoordinate
+                        actionCooldown = 8
+                    end
+                end
+            end
+        end
+
+        gosub @DrawHud
+    end
+end
+
+:UpdateDirectionText
+if or
+    playerHeading < 22.5
+    playerHeading >= 337.5
+then
+    string_format directionText = "N"
+else
+    if
+        playerHeading < 67.5
+    then
+        string_format directionText = "NE"
+    else
+        if
+            playerHeading < 112.5
+        then
+            string_format directionText = "E"
+        else
+            if
+                playerHeading < 157.5
+            then
+                string_format directionText = "SE"
+            else
+                if
+                    playerHeading < 202.5
+                then
+                    string_format directionText = "S"
+                else
+                    if
+                        playerHeading < 247.5
+                    then
+                        string_format directionText = "SW"
+                    else
+                        if
+                            playerHeading < 292.5
+                        then
+                            string_format directionText = "W"
+                        else
+                            string_format directionText = "NW"
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+return
+
+:LoadSelectedName
+int namesFileHandle = 0
+int lineNumber = 0
+int lineLength = 0
+int foundLine = 0
+
+string_format selectedName = "ped%03d" nameIndex
+
+if
+    not namesFileHandle = open_file {filePathName} Names_Filename {mode} 'rt'
+then
+    if
+        namesMissingWarned == 0
+    then
+        string_format statusText = "name-list.txt yok, ped isimleri kullaniliyor."
+        statusTimer = 240
+        namesMissingWarned = 1
+    end
+    return
+end
+
+namesMissingWarned = 0
+
+repeat
+    if
+        is_end_of_file_reached namesFileHandle
+    then
+        break
+    end
+
+    if
+        read_string_from_file namesFileHandle to lineText size 31
+    then
+        lineLength = get_text_length {text} lineText
+        if
+            lineLength > 0
+        then
+            lineNumber += 1
+            if
+                lineNumber == nameIndex
+            then
+                string_format selectedName = "%s" lineText
+                foundLine = 1
+                break
+            end
+        end
+    else
+        break
+    end
+until false
+
+close_file namesFileHandle
+
+if
+    foundLine == 0
+then
+    string_format selectedName = "ped%03d" nameIndex
+end
+return
+
+:DrawHud
+if
+    statusTimer > 0
+then
+    draw_rect {pos} 320.0 28.0 {size} 640.0 56.0 {rgb} 0x00 0x00 0x00 {alpha} 150
+else
+    draw_rect {pos} 320.0 24.0 {size} 640.0 44.0 {rgb} 0x00 0x00 0x00 {alpha} 150
+end
+
+set_text_font {font} Font.Menu
+set_text_scale {width} 0.34 {height} 1.42
+set_text_colour {rgb} 0xFF 0xE2 0x2B {alpha} 255
+set_text_edge {size} 2 {rgb} 0 0 0 {alpha} 220
+set_text_centre {state} true
+set_text_centre_size {width} 640.0
+display_text_formatted {pos} 320.0 8.0 {format} "X: %.2f  Y: %.2f  Z: %.2f  ROT: %.2f  DIR: %s" {args} playerPos[0] playerPos[1] playerPos[2] playerHeading directionText
+
+set_text_scale {width} 0.26 {height} 1.02
+set_text_colour {rgb} 0xFF 0xFF 0xFF {alpha} 255
+
+display_text_formatted {pos} 320.0 23.0 {format} "Secili: %s  |  NumPad4/6 isim  |  F3 kaydet" {args} selectedName
+
+if
+    statusTimer > 0
+then
+    display_text_formatted {pos} 320.0 37.0 {format} "%s" {args} statusText
+    statusTimer -= 1
+end
+return
+
+:SaveCurrentCoordinate
+int fileHandle = 0
+int lastHandle = 0
+
+savedTag = nameIndex
+
+if
+    not fileHandle = open_file {filePathName} Output_Filename {mode} 'at'
+then
+    string_format statusText = "Kayit hatasi: dosya acilamadi."
+    statusTimer = 180
+    return
+end
+
+write_formatted_string_to_file fileHandle {format} "%s X: %.2f  Y: %.2f  Z: %.2f  ROT: %.2f  DIR: %s%c" {args} selectedName playerPos[0] playerPos[1] playerPos[2] playerHeading directionText 0x0A
+close_file fileHandle
+
+if
+    lastHandle = open_file {filePathName} Last_Filename {mode} 'wt'
+then
+        write_formatted_string_to_file lastHandle {format} "%s X: %.2f  Y: %.2f  Z: %.2f  ROT: %.2f  DIR: %s%c" {args} selectedName playerPos[0] playerPos[1] playerPos[2] playerHeading directionText 0x0A
+        close_file lastHandle
+end
+
+string_format statusText = "Kaydedildi: %s" selectedName
+statusTimer = 180
+
+if
+    nameIndex < 999
+then
+    nameIndex += 1
+    gosub @LoadSelectedName
+end
+return
+
+terminate_this_script

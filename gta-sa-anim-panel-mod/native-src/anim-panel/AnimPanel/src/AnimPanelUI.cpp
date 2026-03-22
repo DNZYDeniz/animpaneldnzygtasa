@@ -3,26 +3,12 @@
 #include <windows.h>
 #include <imgui.h>
 
-#include <array>
 #include <string>
 #include <utility>
 
 namespace animpanel {
 
 namespace {
-
-constexpr std::array<const char*, 10> kCategories = {
-    "All",
-    "Favorites",
-    "Recent",
-    "Poses",
-    "Idles",
-    "Social",
-    "Sit",
-    "Lean",
-    "Dance",
-    "Misc"
-};
 
 constexpr int kViewCategories = 0;
 constexpr int kViewAnimations = 1;
@@ -55,11 +41,31 @@ void DrawBoldText(ImDrawList* drawList, const ImVec2& pos, ImU32 color, const ch
 
 AnimPanelUI::AnimPanelUI(AnimCatalog& catalog, AnimPanelState& state, AnimPanelCallbacks callbacks)
     : m_catalog(catalog), m_state(state), m_callbacks(std::move(callbacks)) {
+    m_categories = m_catalog.MenuCategories();
     RefreshResults();
 }
 
 void AnimPanelUI::RefreshResults() {
-    m_state.filteredIndices = m_catalog.Query("", kCategories[static_cast<size_t>(m_state.categoryIndex)]);
+    if (m_categories.empty()) {
+        m_state.filteredIndices.clear();
+        m_state.selectedResult = 0;
+        return;
+    }
+
+    if (m_state.categoryIndex < 0) {
+        m_state.categoryIndex = 0;
+    }
+    if (m_state.categoryIndex >= static_cast<int>(m_categories.size())) {
+        m_state.categoryIndex = static_cast<int>(m_categories.size() - 1);
+    }
+    if (m_state.categoryCursor < 0) {
+        m_state.categoryCursor = 0;
+    }
+    if (m_state.categoryCursor >= static_cast<int>(m_categories.size())) {
+        m_state.categoryCursor = m_state.categoryIndex;
+    }
+
+    m_state.filteredIndices = m_catalog.Query("", GetCategoryLabel(m_state.categoryIndex));
     if (m_state.filteredIndices.empty()) {
         m_state.selectedResult = 0;
         return;
@@ -81,7 +87,7 @@ void AnimPanelUI::HandleKeyboard() {
         if (m_state.viewMode == kViewCategories) {
             m_state.categoryCursor -= 1;
             if (m_state.categoryCursor < 0) {
-                m_state.categoryCursor = static_cast<int>(kCategories.size() - 1);
+                m_state.categoryCursor = static_cast<int>(m_categories.size() - 1);
             }
         } else if (!m_state.filteredIndices.empty()) {
             m_state.selectedResult -= 1;
@@ -94,7 +100,7 @@ void AnimPanelUI::HandleKeyboard() {
     if (ConsumeAnyKeyPress({ VK_NUMPAD2, VK_DOWN })) {
         if (m_state.viewMode == kViewCategories) {
             m_state.categoryCursor += 1;
-            if (m_state.categoryCursor >= static_cast<int>(kCategories.size())) {
+            if (m_state.categoryCursor >= static_cast<int>(m_categories.size())) {
                 m_state.categoryCursor = 0;
             }
         } else if (!m_state.filteredIndices.empty()) {
@@ -125,7 +131,7 @@ void AnimPanelUI::HandleKeyboard() {
             m_state.selectedResult = 0;
             RefreshResults();
             m_state.viewMode = kViewAnimations;
-            m_state.statusLine = std::string("Opened ") + kCategories[static_cast<size_t>(m_state.categoryIndex)];
+            m_state.statusLine = std::string("Opened ") + GetCategoryLabel(m_state.categoryIndex);
         } else {
             const AnimEntry* selected = GetSelectedEntry();
             if (selected != nullptr && m_callbacks.onPlay) {
@@ -197,7 +203,7 @@ void AnimPanelUI::Render() {
     ImGui::SetCursorPos(ImVec2(20.0f, 14.0f));
     ImGui::TextColored(ImVec4(0.98f, 0.98f, 0.98f, 1.0f), "ANIMATION PANEL");
     ImGui::SetCursorPos(ImVec2(20.0f, 43.0f));
-    ImGui::TextColored(ImVec4(0.08f, 0.09f, 0.10f, 0.92f), "%s", m_state.viewMode == kViewCategories ? "Categories" : kCategories[static_cast<size_t>(m_state.categoryIndex)]);
+    ImGui::TextColored(ImVec4(0.08f, 0.09f, 0.10f, 0.92f), "%s", m_state.viewMode == kViewCategories ? "Categories" : GetCategoryLabel(m_state.categoryIndex).c_str());
     ImGui::SameLine();
     if (m_state.viewMode == kViewAnimations) {
         const int page = (m_state.selectedResult / kVisibleRows) + 1;
@@ -236,6 +242,14 @@ const AnimEntry* AnimPanelUI::GetSelectedEntry() const {
     return &m_catalog.Entries()[m_state.filteredIndices[static_cast<size_t>(m_state.selectedResult)]];
 }
 
+const std::string& AnimPanelUI::GetCategoryLabel(int index) const {
+    static const std::string kFallbackCategory = "All";
+    if (index < 0 || index >= static_cast<int>(m_categories.size())) {
+        return kFallbackCategory;
+    }
+    return m_categories[static_cast<size_t>(index)];
+}
+
 void AnimPanelUI::ApplyStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 18.0f;
@@ -262,7 +276,7 @@ void AnimPanelUI::ApplyStyle() {
 }
 
 void AnimPanelUI::RenderCategoryMenu() {
-    for (int i = 0; i < static_cast<int>(kCategories.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(m_categories.size()); ++i) {
         const bool selected = m_state.categoryCursor == i;
         const ImVec2 start = ImGui::GetCursorScreenPos();
         const ImVec2 itemSize(ImGui::GetContentRegionAvail().x, 28.0f);
@@ -274,10 +288,10 @@ void AnimPanelUI::RenderCategoryMenu() {
             drawList->AddRectFilled(start, ImVec2(start.x + 7.0f, start.y + itemSize.y), IM_COL32(255, 255, 255, 255), 10.0f, ImDrawFlags_RoundCornersLeft);
         }
 
-        const int count = static_cast<int>(m_catalog.Query("", kCategories[static_cast<size_t>(i)]).size());
+        const int count = static_cast<int>(m_catalog.Query("", GetCategoryLabel(i)).size());
         const ImU32 leftColor = selected ? IM_COL32(18, 18, 18, 255) : IM_COL32(250, 250, 247, 255);
         const ImU32 rightColor = selected ? IM_COL32(28, 28, 28, 225) : IM_COL32(250, 214, 70, 255);
-        DrawBoldText(drawList, ImVec2(start.x + 18.0f, start.y + 3.5f), leftColor, kCategories[static_cast<size_t>(i)]);
+        DrawBoldText(drawList, ImVec2(start.x + 18.0f, start.y + 3.5f), leftColor, GetCategoryLabel(i).c_str());
         char countLabel[16];
         std::snprintf(countLabel, sizeof(countLabel), "%d", count);
         DrawBoldText(drawList, ImVec2(start.x + itemSize.x - 38.0f, start.y + 3.5f), rightColor, countLabel, 0.7f);
@@ -314,9 +328,7 @@ void AnimPanelUI::RenderAnimationMenu() {
         }
 
         const ImU32 leftColor = selected ? IM_COL32(18, 18, 18, 255) : IM_COL32(250, 250, 247, 255);
-        const ImU32 rightColor = selected ? IM_COL32(28, 28, 28, 225) : IM_COL32(250, 214, 70, 255);
         DrawBoldText(drawList, ImVec2(start.x + 16.0f, start.y + 1.5f), leftColor, entry.displayName.c_str(), 0.75f);
-        DrawBoldText(drawList, ImVec2(start.x + itemSize.x - 112.0f, start.y + 1.5f), rightColor, entry.animName.c_str(), 0.75f);
 
         ImGui::Dummy(ImVec2(itemSize.x, itemSize.y));
     }
