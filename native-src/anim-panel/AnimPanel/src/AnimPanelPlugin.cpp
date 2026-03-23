@@ -24,6 +24,9 @@
 #include <backends/imgui_impl_dx9.h>
 #include <backends/imgui_impl_win32.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../../../third_party/plugin-sdk/stb/stb_image.h"
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 using namespace plugin;
@@ -42,6 +45,7 @@ constexpr char kFallbackCopyRelativePath[] = "cache\\last-selected.txt";
 constexpr char kNativeLogRelativePath[] = "logs\\native-panel.log";
 constexpr char kFaultAnimsRelativePath[] = "logs\\faultanims.txt";
 constexpr char kUiFontRelativePath[] = "fonts\\Rajdhani-Bold.ttf";
+constexpr char kFavoriteStarRelativePath[] = "images\\star.png";
 constexpr float kPi = 3.1415926535f;
 constexpr DWORD kVerifyDelayMs = 100;
 constexpr float kFacingHeading = 180.0f;
@@ -85,6 +89,7 @@ int g_attemptCount = 0;
 int g_attemptIndex = -1;
 DWORD g_attemptStartedAt = 0;
 bool g_panelJustOpened = false;
+LPDIRECT3DTEXTURE9 g_favoriteStarTexture = nullptr;
 
 bool ConsumeGlobalKeyPress(int vk) {
     static bool previous[256] = {};
@@ -103,6 +108,8 @@ void ProcessGameplayFrame();
 void ApplyPanelControlLock();
 void ReleasePanelControlLock();
 void QueuePreviewEntry(const AnimEntry& entry, const char* reason);
+void ReleaseFavoriteStarTexture();
+void TryLoadFavoriteStarTexture(IDirect3DDevice9* device);
 
 bool PathExists(const std::string& path) {
     return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;
@@ -170,6 +177,78 @@ void AppendNativeLog(const std::string& text) {
         static_cast<unsigned>(localTime.wMinute),
         static_cast<unsigned>(localTime.wSecond));
     output << "[" << stamp << "] " << text << "\n";
+}
+
+void ReleaseFavoriteStarTexture() {
+    if (g_favoriteStarTexture != nullptr) {
+        g_favoriteStarTexture->Release();
+        g_favoriteStarTexture = nullptr;
+    }
+    g_state.favoriteIconTexture = nullptr;
+    g_state.favoriteIconWidth = 0.0f;
+    g_state.favoriteIconHeight = 0.0f;
+}
+
+void TryLoadFavoriteStarTexture(IDirect3DDevice9* device) {
+    if (device == nullptr || g_favoriteStarTexture != nullptr) {
+        return;
+    }
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    const std::string iconPath = ResolveReadPath(kFavoriteStarRelativePath);
+    stbi_uc* rgba = stbi_load(iconPath.c_str(), &width, &height, &channels, 4);
+    if (rgba == nullptr) {
+        AppendNativeLog("Favorite star texture load failed: " + iconPath);
+        return;
+    }
+
+    if (FAILED(device->CreateTexture(
+        static_cast<UINT>(width),
+        static_cast<UINT>(height),
+        1,
+        0,
+        D3DFMT_A8R8G8B8,
+        D3DPOOL_MANAGED,
+        &g_favoriteStarTexture,
+        nullptr))) {
+        stbi_image_free(rgba);
+        AppendNativeLog("Favorite star Direct3D texture creation failed.");
+        return;
+    }
+
+    D3DLOCKED_RECT locked{};
+    if (FAILED(g_favoriteStarTexture->LockRect(0, &locked, nullptr, 0))) {
+        g_favoriteStarTexture->Release();
+        g_favoriteStarTexture = nullptr;
+        stbi_image_free(rgba);
+        AppendNativeLog("Favorite star texture lock failed.");
+        return;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        const stbi_uc* src = rgba + (y * width * 4);
+        auto* dst = reinterpret_cast<std::uint32_t*>(static_cast<unsigned char*>(locked.pBits) + (y * locked.Pitch));
+        for (int x = 0; x < width; ++x) {
+            const std::uint8_t r = src[x * 4 + 0];
+            const std::uint8_t g = src[x * 4 + 1];
+            const std::uint8_t b = src[x * 4 + 2];
+            const std::uint8_t a = src[x * 4 + 3];
+            dst[x] =
+                (static_cast<std::uint32_t>(a) << 24) |
+                (static_cast<std::uint32_t>(r) << 16) |
+                (static_cast<std::uint32_t>(g) << 8) |
+                static_cast<std::uint32_t>(b);
+        }
+    }
+
+    g_favoriteStarTexture->UnlockRect(0);
+    stbi_image_free(rgba);
+    g_state.favoriteIconTexture = g_favoriteStarTexture;
+    g_state.favoriteIconWidth = static_cast<float>(width);
+    g_state.favoriteIconHeight = static_cast<float>(height);
+    AppendNativeLog("Loaded favorite star texture: " + std::to_string(width) + "x" + std::to_string(height));
 }
 
 void InstallHooksForCurrentDevice(bool forceLog) {
@@ -776,6 +855,7 @@ void InitializeImGui(IDirect3DDevice9* device) {
 
     ImGui_ImplWin32_Init(g_window);
     ImGui_ImplDX9_Init(device);
+    TryLoadFavoriteStarTexture(device);
     g_originalWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WindowProc)));
     g_imguiReady = true;
     AppendNativeLog("ImGui initialized.");
@@ -793,6 +873,7 @@ void ShutdownImGui() {
         g_originalWndProc = nullptr;
     }
 
+    ReleaseFavoriteStarTexture();
     ImGui_ImplDX9_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();

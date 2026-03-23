@@ -121,6 +121,212 @@ This file stores project-specific lessons that must be reviewed at the start of 
 - Before promising a built `.asi`, verify that the native compiler toolchain is present, not just the GTA/CLEO toolchain.
 - For native GTA SA plugins in this workspace, separate "source tree implemented" from "binary built and tested" until `cl.exe` or equivalent is confirmed.
 
+## 2026-03-23 Anim Panel Footer Layout Lesson
+
+### Symptom
+- The lower panel area still looked half-finished, with too much empty dark space above the footer and the control hints wrapping into an awkward extra row.
+
+### Root Cause
+- The native panel height was tied to a tall `86%` screen ratio instead of the actual animation-view content height.
+- The panel width and footer chip spacing were tight enough that the footer wrapped earlier than the reference layout.
+
+### Fix
+- Switch the native panel to a content-driven fixed target height with screen-edge clamping.
+- Widen the panel and tighten footer chip padding/gaps so the footer stays compact like the approved reference.
+
+### Prevention
+- For this native AnimPanel UI, do not use a tall viewport-percentage height when the content structure is already fixed.
+- When matching a locked footer reference, check panel height, panel width, and footer wrap width together instead of tweaking only the footer colors or rounding.
+
+## 2026-03-23 Windows Min Max Macro Lesson
+
+### Symptom
+- The native `AnimPanel` build failed immediately after the footer layout change with syntax errors on `std::min` and `std::max` inside `AnimPanelUI.cpp`.
+
+### Root Cause
+- `windows.h` exposes `min` and `max` macros in this project configuration, which broke the new clamp code when it used `std::min/std::max` directly.
+
+### Fix
+- Replace the clamp with plain `if`-based bounds checks in the UI render path.
+
+### Prevention
+- In native GTA SA sources that include `windows.h`, do not introduce raw `std::min/std::max` clamp code unless `NOMINMAX` is already enforced or the calls are wrapped safely.
+
+## 2026-03-23 Exact Mock Fidelity Lesson
+
+### Symptom
+- A footer/layout tweak intended to improve the panel made the result look worse than before because it still did not match the user's provided reference mock.
+
+### Root Cause
+- The UI was adjusted by approximation instead of treating the user-supplied HTML/CSS mock as the exact layout spec.
+- Panel width, visible row count, selected-details placement, and footer chip alignment all drifted from the approved composition.
+
+### Fix
+- Rebuild the native panel layout directly from the supplied mock structure:
+- fixed `380px` panel width
+- thin header divider
+- separate selected-details block above the footer
+- centered footer chip rows
+- `F7` favorites label matching the visible design
+
+### Prevention
+- When the user supplies a concrete UI mock or exact HTML/CSS reference, treat it as the source of truth instead of "close enough" visual tuning.
+- For AnimPanel layout fixes, change composition first and only then fine-tune colors, spacing, or rounding.
+
+## 2026-03-23 Fixed Visible Rows Layout Lesson
+
+### Symptom
+- The in-game category screen grew much taller than the approved mock and looked nothing like the reference, even though the footer colors and rounded boxes had been adjusted.
+
+### Root Cause
+- The implementation let category mode use a taller body/list area than animation mode, while the approved mock expected the same fixed `12` visible rows and compact total height in both states.
+
+### Fix
+- Rebuild the panel around fixed layout math:
+- `header = 60`
+- `body = 12 visible rows`
+- `info = 85 only in animation mode`
+- `footer = 95 animation / 80 compact`
+- Make category rendering scroll inside that fixed viewport instead of growing the panel.
+
+### Prevention
+- For this AnimPanel UI, do not let category mode expand vertically unless the user explicitly asks for a different composition.
+- If the mock shows a fixed-height browser panel, the runtime panel must scroll the list, not grow the window.
+
+## 2026-03-23 Animation Footer Height Lesson
+
+### Symptom
+- The animation panel still looked too short in-game, and the lower control area felt cramped compared with the approved reference.
+
+### Root Cause
+- The animation-mode footer height was still too small for the intended control presentation, so the lower area visually collapsed even though the body rows were fixed correctly.
+
+### Fix
+- Increase animation-mode footer height to `140px`.
+- Split animation controls into three centered rows:
+- `8 UP | 2 DOWN | 4 / 6 PAGE`
+- `5 PLAY | F7 FAVORITES`
+- `BACK RETURN | ESC CLOSE`
+
+### Prevention
+- When the user reports the panel looks short after body height is fixed, inspect footer height before touching row count again.
+- Treat footer composition as part of total panel height, not as an afterthought inside the same fixed window.
+
+## 2026-03-23 Near-Screen-Height Panel Lesson
+
+### Symptom
+- Even after extending category mode and the animation footer, the full panel still looked too short compared with the user's expectation of a screen-height-near browser.
+
+### Root Cause
+- The visible row counts were still conservative, so the panel composition remained compact even though footer spacing had been improved.
+
+### Fix
+- Increase visible rows substantially for the tall layout target:
+- animation mode: `17`
+- category mode: `21`
+- Keep footer and info sections intact while extending the body viewport.
+
+### Prevention
+- If the user asks for a panel that is "near the height of the game screen", do not keep tuning only footer spacing or a few extra rows.
+- Raise the visible-row budget directly and let paging math follow that taller viewport.
+
+## 2026-03-23 Footer Padding Overlap Lesson
+
+### Symptom
+- Footer text and buttons started colliding: `Return` could appear behind compact-mode buttons, and the bottom row (`BACK` / `ESC`) sat too close to the panel edge.
+
+### Root Cause
+- The compact footer still rendered status text in the same vertical band as the buttons.
+- Footer heights and row start offsets were too tight for the actual in-game font metrics, so the last row lost bottom padding.
+
+### Fix
+- Stop rendering generic status text in compact footer modes.
+- Increase footer heights and push button rows upward with larger bottom-safe padding.
+- Trade a small amount of list height for cleaner footer spacing.
+
+### Prevention
+- In this panel, compact footer modes should prioritize button legibility over transient status text.
+- If the last footer row visually touches the bottom border, fix padding first and only then revisit row count.
+
+## 2026-03-23 Footer Safe Area Lesson
+
+### Symptom
+- Even after removing the worst overlap, the footer still felt cramped: the `Previewing` line, button rows, and bottom edge did not have enough breathing room.
+
+### Root Cause
+- The panel allocated enough height to avoid clipping, but not enough vertical safe area for the footer content to look intentional.
+- Too many visible list rows were still competing with the footer for space.
+
+### Fix
+- Reduce visible rows slightly again.
+- Increase both animation and compact footer heights.
+- Push the button rows further down from the preview line while keeping extra bottom padding under the last row.
+
+### Prevention
+- For this AnimPanel layout, "not clipping" is not enough; footer controls need explicit top and bottom safe area.
+- When a panel still feels crowded after a basic padding fix, trade list viewport height for footer breathing room.
+
+## 2026-03-23 Selected Block Breathing Room Lesson
+
+### Symptom
+- The `Selected / IFP / anim id` block sat too close to the yellow footer, and the last button row still felt visually pinned near the bottom border.
+
+### Root Cause
+- The dark info block between the list and footer was too shallow, and the footer button rows still started too low relative to the available space.
+
+### Fix
+- Reduce visible list rows again.
+- Increase the selected-details block height.
+- Increase animation/footer heights and move the button rows upward while preserving more empty space below the last row.
+
+### Prevention
+- When the user asks for more distance between dark metadata text and the yellow footer, solve it by enlarging the interstitial block, not just by nudging text a few pixels.
+- Footer padding should be judged by the empty space under the last row, not only by whether the buttons fit.
+
+## 2026-03-23 Footer Row Vertical Offset Lesson
+
+### Symptom
+- After the footer safe-area expansion, the button rows still sat visually too low inside the yellow block even though clipping was gone.
+
+### Root Cause
+- The footer row start offset was tuned for fit, not for visual balance, so the preserved extra height ended up mostly above the controls instead of below them.
+
+### Fix
+- Move the entire footer button group upward by reducing the row-start Y offset in both animation and compact modes.
+
+### Prevention
+- When the user asks for "more yellow space below the buttons", adjust the footer row origin before changing chip sizes or footer height again.
+
+## 2026-03-23 Favorite Visibility Lesson
+
+### Symptom
+- Toggling favorites was easy to miss because the list only showed a tiny `*`, and there was no clear in-panel confirmation that `F7` actually changed state.
+
+### Root Cause
+- Favorite state relied on minimal text-only affordances instead of a visible icon and short-lived feedback message.
+
+### Fix
+- Replace the trailing `*` marker with the shipped `AnimPanel\\images\\star.png` icon.
+- Show a short fade toast near the top of the panel when favorites are added or removed.
+
+### Prevention
+- For repetitive actions like favorites, do not rely on single-character markers alone.
+- If an action changes persistent state, add at least one strong visual confirmation inside the panel itself.
+
+## 2026-03-23 Native Third-Party Include Path Lesson
+
+### Symptom
+- The native build failed immediately after adding PNG icon loading because `stb_image.h` could not be found.
+
+### Root Cause
+- The source included `stb/stb_image.h` as if the project already exposed the plugin-sdk `stb` folder in additional include directories.
+
+### Fix
+- Include `stb_image.h` through the real relative path from `AnimPanelPlugin.cpp`.
+
+### Prevention
+- When adding a new third-party header in this native project, verify the project include paths first instead of assuming the whole dependency tree is already exported.
+
 ## 2026-03-21 Ready-To-Test Claim Lesson
 
 ### Symptom
@@ -294,8 +500,88 @@ This file stores project-specific lessons that must be reviewed at the start of 
 ### Prevention
 - If one member of a prop/minigame library crashes, remove the whole library instead of waiting for more single-ID crashes.
 - Filter both bracketed and plain-text missing-animation markers when generating the catalog from upstream descriptions.
+- The same rule applies when the source-of-truth changes from open.mp to a local verified list. A new source file can accidentally reintroduce the same unsafe library, so block `BSKTBALL` again in the active generator rather than assuming an older filter still protects the runtime.
 
 ## 2026-03-23 Vehicle Door And Object Scene Lesson
+
+### Symptom
+- `PED/CAR_CLOSEDOOR_*`, `FINALE2/FIN_COP2_CLIMBOUT`, windshield-hang, van-door, tank-hatch gibi animler preview sırasında oyunu düşürdü.
+
+### Root Cause
+- Bu klipler serbest on-foot preview animleri değil; araç kapısı, firetruck merdiveni, windshield, hatch veya benzeri obje/vehicle state bağımlı sahne animleri.
+- Logda crash öncesi son satır doğrudan problemli klibi gösteriyordu; örnek:
+- `STATUS: Previewing FINALE2/FIN_COP2_CLIMBOUT`
+- `Play attempt #1 anim=FIN_COP2_CLIMBOUT ifp=FINALE2 opcode=0812`
+
+### Fix
+- Lua kaynak katalog generator'ında adult ve vehicle/object-scene-dependent animleri filtrele.
+- `Adult` kategorisini komple kaldır.
+- `car door`, `van`, `tank`, `firetruck`, `windshield`, `ladder`, `climb out`, `hatch` gibi bağlamları blokla.
+
+### Prevention
+- Bir anim belirli araç/obje state'ine bağlı görünüyorsa tek tek debug etme; aile/binding kelimeleriyle jeneratör seviyesinde ele.
+- Native logda son `STATUS` ve `Play attempt` satırı hangi family'nin katalogdan çıkarılacağını belirler.
+
+## 2026-03-23 Sequential Catalog Verification Lesson
+
+### Symptom
+- Generator çalıştıktan hemen sonra alınan sayı kontrolü eski katalog sayısını gösterdi.
+
+### Root Cause
+- Katalog üretimi ve doğrulama paralel koştu; doğrulama eski dosyayı okudu.
+
+### Fix
+- Generator ve katalog doğrulamasını tek shell çağrısında ardışık çalıştır.
+
+### Prevention
+- AnimPanel katalog üretiminde dosya yazan adımla sonuç kontrolünü paralel koşturma.
+- Önce yaz, sonra aynı süreçte oku ve sayıları doğrula.
+
+## 2026-03-23 Exact-ID Fault Filter Lesson
+
+### Symptom
+- `Aiming a gun 1` (`SHOP/SHP_GUN_AIM`) listed under `All` and `Weapons` blocked smooth browsing and was reported as a bad entry even though the whole `SHOP` family was not being removed.
+
+### Root Cause
+- Some unsafe entries are not broad family problems; they are single IDs inside otherwise useful libraries.
+
+### Fix
+- Add exact-ID blocking to the active Lua generator and remove `SHOP:SHP_GUN_AIM` from the generated catalog.
+
+### Prevention
+- When one specific animation is bad but the library is still broadly useful, block the exact `LIBRARY:ANIM` ID instead of over-filtering the whole family.
+
+## 2026-03-23 Native Build Configuration Lesson
+
+### Symptom
+- Native `AnimPanel.sln` build command failed with `MSB4126` and said `Release|Win32` was not a valid solution configuration.
+
+### Root Cause
+- The solution does not use plain `Release|Win32`. The correct solution profile is `Release GTASA|Win32`.
+
+### Fix
+- Build the solution with:
+- `MSBuild AnimPanel.sln /p:Configuration="Release GTASA" /p:Platform=Win32`
+
+### Prevention
+- For AnimPanel native builds in this workspace, do not guess the solution configuration name.
+- Use the exact Visual Studio solution profile `Release GTASA | Win32` unless the project file is explicitly changed.
+
+## 2026-03-23 Verified Local Animation Source Lesson
+
+### Symptom
+- The shipped animation catalog drifted away from the user's verified working list because generation still depended on earlier filtered upstream sources.
+
+### Root Cause
+- The project kept treating the older generated catalog as source-of-truth even after the user provided a local `animlist.lua` that they explicitly identified as the fully working list.
+
+### Fix
+- Add a dedicated generator for `animlist.lua` and regenerate `AnimPanel\data\anim-catalog.json` directly from that file.
+- Rebuild categories from description/name heuristics on top of the verified local list instead of reusing the old filtered upstream catalog.
+
+### Prevention
+- If the user provides a verified local runtime list for AnimPanel, promote that file to source-of-truth immediately instead of layering more edits onto an older generated catalog.
+- Keep the generator script aligned with the active source file so future catalog rebuilds are reproducible.
 
 ### Symptom
 - `PED/CAR_CLOSEDOOR_RHS` crashed the game, and nearby entries were clearly tied to doors, safes, crates, or car interaction scenes.
@@ -1408,3 +1694,39 @@ This file stores project-specific lessons that must be reviewed at the start of 
 ### Prevention
 - Do not treat "same library" or "similar surrounding animations worked" as proof that every sibling is preview-safe.
 - When a family mostly works but one entry crashes immediately on its own play attempt, classify it as a pose-dependent transition and remove that pattern from the catalog.
+
+## 2026-03-23 AnimPanel Runtime Asset Sync Lesson
+
+### Symptom
+- Native favorite-star icon support built successfully, but the standalone release tree was missing `AnimPanel\\images\\star.png`.
+- Runtime in the main workspace could show the icon while packaged output silently fell back or shipped incomplete.
+
+### Root Cause
+- The code and root runtime asset were updated, but the release mirror for newly introduced UI assets was not synced in the same pass.
+
+### Fix
+- Mirror every new runtime UI asset into both the live `AnimPanel\\...` tree and the release package tree immediately after implementation.
+
+### Prevention
+- Whenever `AnimPanel` starts reading a new runtime file type such as `images\\*.png`, verify the file exists in:
+- `D:\\GTASAVIDEOCEKME\\AnimPanel\\...`
+- `D:\\GTASAVIDEOCEKME\\release\\AnimPanel-Standalone\\AnimPanel\\...`
+- Treat missing mirrored assets as a packaging bug even if the root workspace copy still works.
+
+## 2026-03-23 AnimPanel Favorite UI Placement Lesson
+
+### Symptom
+- The favorite star image looked cramped because it was forced into a tiny fixed square.
+- The favorite toast text appeared clipped inside the panel instead of reading like a separate notification.
+
+### Root Cause
+- The row renderer ignored the actual texture dimensions and hardcoded a miniature icon size.
+- The toast was drawn with the window draw list, so anything placed above the panel was still clipped by the panel window.
+
+### Fix
+- Store the loaded favorite texture width and height in UI state and draw the icon at its native size.
+- Draw detached notifications with the foreground draw list and position them above the panel, not inside the panel window.
+
+### Prevention
+- When replacing a text glyph with an image asset in `AnimPanel`, prefer the real asset dimensions first and only scale down if the user explicitly wants it.
+- Any UI element that must visually float outside the panel must use `ImGui::GetForegroundDrawList()` instead of the panel window draw list.

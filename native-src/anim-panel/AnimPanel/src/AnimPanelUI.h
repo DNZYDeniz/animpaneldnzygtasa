@@ -3,6 +3,7 @@
 #include "AnimCatalog.h"
 
 #include <functional>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,12 @@ struct AnimPanelState {
     int categoryCursor = 0;
     int settingsCursor = 0;
     int viewMode = 0;
+    void* favoriteIconTexture = nullptr;
+    float favoriteIconWidth = 0.0f;
+    float favoriteIconHeight = 0.0f;
+    std::string toastText;
+    std::uint32_t toastStartedAt = 0;
+    std::uint32_t toastDurationMs = 0;
     std::vector<size_t> filteredIndices;
     std::string statusLine;
 };
@@ -44,10 +51,13 @@ private:
     const std::string& GetCategoryLabel(int index) const;
     bool IsSettingsCategory(int index) const;
     void TriggerPreviewForSelection();
+    void ToggleFavoriteForSelection();
     void ApplyStyle();
     void RenderCategoryMenu();
     void RenderAnimationMenu();
+    void RenderSelectionDetails();
     void RenderSettingsMenu();
+    void RenderFavoriteToast();
     void RenderFooter();
 
     AnimCatalog& m_catalog;
