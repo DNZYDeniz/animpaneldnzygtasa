@@ -15,6 +15,8 @@ struct AnimEntry {
     std::string category;
     std::vector<std::string> tags;
     bool loopDefault = false;
+    bool pedFlag = false;
+    bool lockF = false;
     bool poseFlag = false;
     std::string notes;
     bool favorite = false;
@@ -32,6 +34,7 @@ public:
 
     std::vector<size_t> Query(const std::string& searchText, const std::string& category) const;
     const std::vector<AnimEntry>& Entries() const { return m_entries; }
+    const std::vector<std::string>& MenuCategories() const { return m_menuCategories; }
 
     void ToggleFavorite(size_t index);
     void MarkRecent(size_t index);
@@ -42,9 +45,11 @@ private:
     static std::string EscapeJson(const std::string& value);
     static bool ReadStringIdArray(const std::string& path, std::unordered_set<std::string>& out, std::string& error);
     static bool WriteStringIdArray(const std::string& path, const std::vector<std::string>& values, std::string& error);
+    void RebuildMenuCategories();
     void RebuildSearchHaystack(AnimEntry& entry);
 
     std::vector<AnimEntry> m_entries;
+    std::vector<std::string> m_menuCategories;
 };
 
 } // namespace animpanel

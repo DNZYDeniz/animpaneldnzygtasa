@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <unordered_set>
 #include <sstream>
 
 namespace animpanel {
@@ -34,11 +35,14 @@ bool AnimCatalog::LoadCatalog(const std::string& path, std::string& error) {
         entry.notes = object.strings.at("notes");
         entry.tags = object.arrays.at("tags");
         entry.loopDefault = object.bools.at("loop_default");
+        entry.pedFlag = object.bools.at("ped_flag");
+        entry.lockF = object.bools.at("lock_f");
         entry.poseFlag = object.bools.at("pose_flag");
         RebuildSearchHaystack(entry);
         m_entries.push_back(std::move(entry));
     }
 
+    RebuildMenuCategories();
     return true;
 }
 
@@ -209,13 +213,60 @@ bool AnimCatalog::WriteStringIdArray(const std::string& path, const std::vector<
     return true;
 }
 
+void AnimCatalog::RebuildMenuCategories() {
+    static const char* kPreferredCategories[] = {
+        "Idle",
+        "Social",
+        "Gestures",
+        "Sitting",
+        "Leaning",
+        "Walking",
+        "Running",
+        "Dancing",
+        "Fighting",
+        "Weapons",
+        "Gang",
+        "Smoking",
+        "Eating & Drinking",
+        "Indoor & Chores",
+        "Exercise",
+        "Injury & Death",
+        "Adult",
+        "Misc"
+    };
+
+    m_menuCategories.clear();
+    m_menuCategories.push_back("All");
+    m_menuCategories.push_back("Favorites");
+    m_menuCategories.push_back("Recent");
+
+    std::unordered_set<std::string> seen;
+    for (const AnimEntry& entry : m_entries) {
+        seen.insert(entry.category);
+    }
+
+    for (const char* category : kPreferredCategories) {
+        if (seen.find(category) != seen.end()) {
+            m_menuCategories.push_back(category);
+            seen.erase(category);
+        }
+    }
+
+    std::vector<std::string> leftovers(seen.begin(), seen.end());
+    std::sort(leftovers.begin(), leftovers.end());
+    for (const std::string& category : leftovers) {
+        m_menuCategories.push_back(category);
+    }
+}
+
 void AnimCatalog::RebuildSearchHaystack(AnimEntry& entry) {
     std::ostringstream buffer;
     buffer << entry.displayName << ' '
            << entry.block << ' '
            << entry.animName << ' '
            << entry.ifpFile << ' '
-           << entry.category << ' ';
+           << entry.category << ' '
+           << entry.notes << ' ';
 
     for (const std::string& tag : entry.tags) {
         buffer << tag << ' ';

@@ -1,13 +1,34 @@
 # Anim Panel
 
-This folder documents the native animation panel implementation for classic GTA San Andreas singleplayer.
+This document describes the shipped AnimPanel runtime for classic GTA San Andreas singleplayer.
 
-Current state:
-- Native ASI source lives under `native-src/anim-panel/`.
-- Runtime data and config live under `modloader/AnimPanel/`.
-- The seed animation catalog is generated from `data/animgrp.dat` with `tools/generate-anim-panel-catalog.ps1`.
+Current runtime:
+- Native `.asi` plugin only
+- No CLEO dependency
+- No Mod Loader dependency
+- Runtime data lives in `AnimPanel\` at the GTA SA root
 
-Important limits:
-- The generated seed catalog is a bootstrap dataset from animation groups. It is not yet a full `ped.ifp` dump.
-- The panel architecture is native-first because search, input capture, clipboard, scalable fonts, and virtualized lists are a poor fit for a large pure CLEO UI.
-- Build tools are not bundled in this workspace, so the source tree is scaffolded here and must be compiled on a machine with Visual Studio Build Tools, plugin-sdk, and Dear ImGui installed.
+Required files:
+- `AnimPanel.asi`
+- `AnimPanel\data\anim-catalog.json`
+- `AnimPanel\data\favorites.json`
+- `AnimPanel\data\recents.json`
+- `AnimPanel\fonts\Rajdhani-Bold.ttf`
+
+Game target:
+- GTA San Andreas 1.0 US
+
+Recommended environment:
+- ASI Loader installed
+- SilentPatch SA installed
+
+Controls:
+- `F8` toggle panel
+- `ESC` close panel
+- `8 / 2` move selection
+- `4 / 6` page
+- `5` play selected animation
+
+Catalog notes:
+- The animation catalog is generated from the official open.mp animation dataset.
+- The shipped catalog is filtered to remove obvious vehicle-only, paired-scene, prop-dependent, and pose-transition-risky entries that are not safe for solo CJ preview.

@@ -1,22 +1,31 @@
 # AnimPanel Native Source
 
-This module contains the native ASI source for the GTA SA animation browser panel.
+Native-only source for the GTA San Andreas singleplayer animation browser.
+
+Current architecture:
+- `AnimPanel.asi` handles UI, input, camera, state, and animation playback.
+- No CLEO bridge is used.
+- Runtime assets are read from `AnimPanel\...` in the game root.
+- Legacy fallback reads `modloader\AnimPanel\...` only for backward compatibility.
+
+Runtime files required by the released mod:
+- `AnimPanel.asi`
+- `AnimPanel\data\anim-catalog.json`
+- `AnimPanel\data\favorites.json`
+- `AnimPanel\data\recents.json`
+- `AnimPanel\fonts\Rajdhani-Bold.ttf`
 
 Build prerequisites:
-- Visual Studio Build Tools with MSVC Win32 toolset
-- `PLUGIN_SDK_DIR` environment variable pointing to a plugin-sdk checkout
-- `CLEO_SDK_SA_DIR` environment variable pointing to `D:\GTASAVIDEOCEKME\cleo_sdk`
-- `IMGUI_DIR` environment variable pointing to a Dear ImGui checkout
+- Visual Studio 2022 Build Tools or Visual Studio 2022 with MSVC Win32 toolset
+- Windows SDK with Direct3D 9 libraries
+- Bundled `third_party\imgui`
+- Bundled `third_party\plugin-sdk`
 
-Output target:
-- `AnimPanel.asi` in the GTA SA root
-
-Runtime content:
-- `modloader/AnimPanel/config/anim-panel.ini`
-- `modloader/AnimPanel/data/anim-catalog.json`
-- `modloader/AnimPanel/data/favorites.json`
-- `modloader/AnimPanel/data/recents.json`
+Build target:
+- Open `AnimPanel.sln`
+- Build `Release GTASA | Win32`
+- Output: `native-src\anim-panel\output\AnimPanel.asi`
 
 Notes:
-- The current workspace does not expose `cl.exe`, `msbuild`, or `cmake`, so the project files are prepared but not compiled here.
-- The source is split into a small data core and an ImGui-facing panel layer to keep search/filter logic testable outside of render hooks.
+- The project links with `/MT`, so the release build does not require a separate Visual C++ runtime installer.
+- Target game is classic GTA San Andreas 1.0 US singleplayer.
